@@ -218,9 +218,37 @@ impl WebService {
                 ));
                 return Ok(response);
             }
-            Some(ip_str) => ip_str,
+            Some(ip_str) => {
+                if ip_str == "self" {
+                    // Check X-Real-IP first (common in nginx)
+                    if let Some(real_ip) = req.headers.get_raw("X-Real-IP").and_then(|x| x.first()) {
+                        if let Ok(ip_str) = String::from_utf8(real_ip.clone()) {
+                            ip_str.trim().to_string()
+                        } else {
+                            req.remote_addr.ip().to_string()
+                        }
+                    }
+                    // Then try X-Forwarded-For
+                    else if let Some(forwarded) = req.headers.get_raw("X-Forwarded-For").and_then(|x| x.first()) {
+                        if let Ok(header_str) = String::from_utf8(forwarded.clone()) {
+                            // Get first IP in case of multiple forwards
+                            if let Some(first_ip) = header_str.split(',').next() {
+                                first_ip.trim().to_string()
+                            } else {
+                                req.remote_addr.ip().to_string()
+                            }
+                        } else {
+                            req.remote_addr.ip().to_string()
+                        }
+                    } else {
+                        req.remote_addr.ip().to_string()
+                    }
+                } else {
+                    ip_str.to_string()
+                }
+            }
         };
-        let ip = match IpAddr::from_str(ip_str) {
+        let ip = match IpAddr::from_str(&ip_str) {
             Err(_) => {
                 return Ok(Response::with((
                     status::BadRequest,
