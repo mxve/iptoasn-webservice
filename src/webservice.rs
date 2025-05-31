@@ -8,6 +8,7 @@ use iron::status;
 use iron::{typemap, BeforeMiddleware};
 use router::Router;
 
+use std::convert::TryFrom;
 use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
@@ -15,6 +16,29 @@ use time::{self, Duration};
 use unicase::UniCase;
 
 const TTL: u32 = 86_400;
+
+fn country_code_to_region(country_code: &str) -> String {
+    match keshvar::Alpha2::try_from(country_code) {
+        Ok(alpha2) => {
+            match keshvar::Country::try_from(alpha2) {
+                Ok(country) => {
+                    let continent = country.continent();
+                    match continent {
+                        keshvar::Continent::Africa => "Africa".to_string(),
+                        keshvar::Continent::Antarctica => "Antarctica".to_string(),
+                        keshvar::Continent::Asia => "Asia".to_string(),
+                        keshvar::Continent::Australia => "Oceania".to_string(),
+                        keshvar::Continent::Europe => "Europe".to_string(),
+                        keshvar::Continent::NorthAmerica => "NorthAmerica".to_string(),
+                        keshvar::Continent::SouthAmerica => "SouthAmerica".to_string(),
+                    }
+                },
+                Err(_) => "Unknown".to_string(),
+            }
+        },
+        Err(_) => "Unknown".to_string(),
+    }
+}
 
 struct ASNsMiddleware {
     asns_arc: Arc<RwLock<Arc<ASNs>>>,
@@ -161,6 +185,11 @@ impl WebService {
                             td { : format_args!("{}", map.get("as_description")
                                 .unwrap().as_str().unwrap()) }
                         }
+                        tr {
+                            th { : "Region" }
+                            td { : format_args!("{}", map.get("region")
+                                .unwrap().as_str().unwrap()) }
+                        }
                     }
                 }
             }
@@ -298,6 +327,11 @@ impl WebService {
         map.insert(
             "as_description".to_string(),
             serde_json::value::Value::String(found.description.clone()),
+        );
+        let region = country_code_to_region(&found.country);
+        map.insert(
+            "region".to_string(),
+            serde_json::value::Value::String(region),
         );
         Self::output(&Self::accept_type(req), &map, cache_headers, vary_header)
     }
