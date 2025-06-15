@@ -22,6 +22,10 @@ fn country_code_to_region(country_code: &str) -> String {
         Ok(alpha2) => {
             match keshvar::Country::try_from(alpha2) {
                 Ok(country) => {
+                    if country_code == "RU" {
+                        return "Russia".to_string();
+                    }
+                    
                     let continent = country.continent();
                     match continent {
                         keshvar::Continent::Africa => "Africa".to_string(),
